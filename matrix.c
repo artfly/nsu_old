@@ -60,6 +60,7 @@ int scan_matrix (size_t N, char * filename, double * matrix_chunk, size_t row_le
 	}
 
 	free (send_buf);
+	fclose (matrix);
 	return 0;
 }
 
@@ -172,8 +173,6 @@ int main(int argc, char *argv[]) {
 			//printf("Process : %d Added : %lf Index : %lu\n", rank, vector_chunk[j] * matrix_chunk [j * N + (rank + additional_shift + j + i) % N], j * N + (rank + additional_shift + j + i) % N);
 		}
 		MPI_Barrier (MPI_COMM_WORLD);
-		if (rank == ROOT)
-			//printf("shift\n");
 		shift_vector (process_rows, vector_chunk);
 	}
 	//gather_coords (coords, N, process_rows);
