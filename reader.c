@@ -3,6 +3,10 @@
 
 
 int scan_matrix (size_t N, char * filename, double * matrix_chunk, size_t row_length) {
+	if (size > N) {
+		printf("error : too big amount of proceses\n");
+		return EXIT_FAIL;
+	}
 	int i = 0;												//TODO: size > N
 	size_t gets_additional = N % size;
 	double * send_buf = NULL;

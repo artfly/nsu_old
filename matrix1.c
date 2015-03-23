@@ -1,26 +1,38 @@
 #include "matrix.h"
 
-void multiply (size_t process_rows, double * coords, double * matrix_chunk, double * vector, size_t N) {
+void multiply (double * result, double * matrix_chunk, double * vector, int * recvcounts, int * displs, int N) {
 	int i = 0;
-	size_t additional_shift = 0;
-	if (rank != ROOT) {
-		if (rank < N % size) {
-			additional_shift = rank - 1;
-		}
-		else {
-			additional_shift = N % size;
-		}
-	}
-
-	for (i = 0; i < process_rows; i++) {
+	for (i = 0; i < recvcounts[rank]; i++) {
 		int j = 0;
 		for (j = 0; j < N; j++) {
-			coords[rank + additional_shift + i] += matrix_chunk[i * N + j] * vector[j];
+			result[displs[rank] + i] += matrix_chunk[i * N + j] * vector[j];
 		}
 	}
-	printf("%lf\n", *(coords + rank + additional_shift));
-	printf("Rank : %d additional_shift : %lu process_rows : %lu\n", rank, additional_shift, process_rows);
-	MPI_Bcast (coords + rank + additional_shift, process_rows, MPI_DOUBLE, rank, MPI_COMM_WORLD);
+}
+
+double norm(double * vector, size_t N) {
+	int i = 0;
+	double result = 0;
+	for (i = 0; i < N; i++) {
+		result += vector[i] * vector[i];
+	}
+	result = sqrtl(result);
+	return result;
+}
+
+void multiply_scalar (double * matrix, double scalar, int * recvcounts, int * displs) {
+	int i = 0;
+	for (i = 0; i < recvcounts[rank]; i++) {
+		matrix[displs[rank] + i] *= scalar;
+	}
+}
+
+void subtract (double * result, double * minuend, double * subtrahend, int * recvcounts, int * displs, size_t N) {
+	int i = 0;
+	for (i = 0; i < recvcounts[rank]; i++) {
+		size_t index = displs[rank] + i;
+		result[index] = minuend[index] - subtrahend[index];
+	}
 }
 
 int main(int argc, char *argv[]) {
@@ -29,51 +41,56 @@ int main(int argc, char *argv[]) {
 	MPI_Comm_rank (MPI_COMM_WORLD, &rank);
 	if (rank == ROOT) {
 		if (argc != 5) {
-			printf("error : wrong number of arguments\n");
 			help(argv[0]);
 			return 1;
 		}
 	}
+	double tau = 0.01;
 	size_t N = atoi(argv[1]);
-	double * matrix_chunk = NULL;
-	double * vector = NULL;
-	double * coords = NULL;
-	size_t process_rows = N / size;
-
-	if (N % size > rank) {
-		process_rows++;
-	}
-	matrix_chunk = malloc (sizeof (double) * N * process_rows);
-	vector = malloc (sizeof (double) * N);
-	coords = calloc (N, sizeof(double));
+	double tmp_norm;
+	int * recvcounts = malloc (sizeof(int) * size);
+	int * displs = malloc (sizeof(int) * size);
+	init_allgatherv (recvcounts, displs, N);
+	double * matrix_chunk = malloc (sizeof (double) * N * recvcounts[rank]);
+	double * b = malloc (sizeof (double) * N);
+	double * x = calloc (N, sizeof(double));
+	double * tmp = malloc (sizeof(double) * N);
 
 	if (rank == ROOT) {
-		if (scan_matrix(N, argv[2], matrix_chunk, N) == EXIT_FAIL) {
+		if (scan_matrix (N, argv[2], matrix_chunk, N) == EXIT_FAIL) {
 			return 2;
 		}
 	}
 	else {
-		MPI_Recv (matrix_chunk, N * process_rows, MPI_DOUBLE, 0, N, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+		MPI_Recv (matrix_chunk, N * recvcounts[rank], MPI_DOUBLE, 0, N, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
 	}
-
-	if (scan_vector (vector, argv[3], N) == EXIT_FAIL) {
+	if (scan_vector (b, argv[3], N) == EXIT_FAIL) {
 		return 2;
 	}
+	double b_norm = norm (b, N);
 
-	int i = 0;
-	for (i = 0; i < size; i++) {
-		if (rank == i) {
-			multiply (process_rows, coords, matrix_chunk, vector, N);
-		}
+	do {
+		multiply (tmp, matrix_chunk, x, recvcounts, displs, N);	
+		subtract (tmp, tmp, b, recvcounts, displs, N);
+		MPI_Allgatherv (MPI_IN_PLACE, recvcounts[rank], MPI_DOUBLE, tmp, recvcounts, displs, MPI_DOUBLE, MPI_COMM_WORLD);
+		tmp_norm = norm (tmp, N);
+		multiply_scalar (tmp, tau, recvcounts, displs);
+		subtract (x, x, tmp, recvcounts, displs, N);
+		MPI_Allgatherv (MPI_IN_PLACE, recvcounts[rank], MPI_DOUBLE, x, recvcounts, displs, MPI_DOUBLE, MPI_COMM_WORLD);
 	}
+	while (tmp_norm / b_norm > EPSILON);
+	
 	if (rank == ROOT) {
+		int i = 0;
 		for (i = 0; i < N; i++) {
-			printf("%lf\n", coords[i]);	
+			printf("%lf\n", x[i]);
 		}
 	}
 
-	free (vector);
+	free (b);
 	free (matrix_chunk);
+	free (x);
+	free (tmp);
 	MPI_Finalize ();
 	return 0;
 }

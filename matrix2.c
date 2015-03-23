@@ -1,77 +1,97 @@
 #include "matrix.h"
 
-void shift_vector (size_t process_rows, double * vector_chunk) {
-	double new_coord;
+void multiply (double * result, double * matrix_chunk, double * vector_chunk, int * recvcounts, int * displs, int N) {
 	int i = 0;
-	MPI_Sendrecv (&vector_chunk[process_rows - 1], 1, MPI_DOUBLE, (rank + 1) % size, 123,
-				  &new_coord, 1, MPI_DOUBLE, (rank + size - 1) % size, 123, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
-	for (i = process_rows; i > 0; i--) {
-		vector_chunk[i] = vector_chunk[i - 1];
-	} 
-	vector_chunk[0] = new_coord;
+	int j = 0;
+	int k = 0;
+	
+	for (i = 0; i < size; i++) {
+		size_t index = (size - i + rank) % (size);
+		for (j = 0; j < recvcounts[rank]; j++) {
+			for (k = 0; k < recvcounts[index]; k++) {
+				result[j] += matrix_chunk[j * N + displs[index] + k] * vector_chunk[k];
+			}
+		}
+		MPI_Sendrecv_replace (vector_chunk, N / size + 1, MPI_DOUBLE,
+						      (rank + 1) % size, 123, (rank + size - 1) % size, 123,
+						      MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+	}
+}
+
+void subtract (double * result, double * minuend, double * subtrahend, int * recvcounts, int * displs, size_t N) {
+	int i = 0;
+	for (i = 0; i < recvcounts[rank]; i++) {
+		result[i] = minuend[i] - subtrahend[i];
+	}
+}
+
+double norm (double * chunk, int * recvcounts) {
+	int i = 0;
+	double sqr_sum = 0;
+	for (i = 0; i < recvcounts[rank]; i++) {
+		sqr_sum += chunk[i] * chunk[i];
+	}
+	MPI_Allreduce (MPI_IN_PLACE, &sqr_sum, 1, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
+	return sqrtf (sqr_sum);
+}
+
+void multiply_scalar (double * vector_chunk, double scalar, int * recvcounts) {
+	int i = 0;
+	for (i = 0; i < recvcounts[rank]; i++) {
+		vector_chunk[i] *= scalar;
+	}
 }
 
 int main(int argc, char *argv[]) {
 	MPI_Init (&argc, &argv);
 	MPI_Comm_size (MPI_COMM_WORLD, &size);
 	MPI_Comm_rank (MPI_COMM_WORLD, &rank);
-	double * matrix_chunk = NULL;
-	double * vector_chunk = NULL;
-	double * coords = NULL;
 	if (rank == ROOT) {
 		if (argc != 5) {
-			printf("error : wrong number of arguments\n");
 			help(argv[0]);
 			return 1;
 		}
 	}
+	double tau = 0.01;
 	size_t N = atoi(argv[1]);
-	size_t process_rows = N / size;
-
-	if (N % size > rank) {
-		process_rows++;
-	}
-	matrix_chunk = malloc (sizeof (double) * N * process_rows);
-	vector_chunk = malloc (sizeof(double) * process_rows);
-	coords = calloc (process_rows, sizeof(double));
+	double tmp_norm;
+	double * matrix_chunk = malloc (sizeof (double) * N *  (N / size + 1));
+	double * b_chunk = malloc (sizeof (double) *  (N / size + 1));
+	double * x_chunk = calloc ((N / size + 1), sizeof(double));
+	double * tmp_chunk = malloc (sizeof(double) * (N / size + 1));
+	int * recvcounts = malloc (sizeof(int) * size);
+	int * displs = malloc (sizeof(int) * size);
+	init_allgatherv (recvcounts, displs, N);
 
 	if (rank == ROOT) {
-		if (scan_matrix (N, argv[2], matrix_chunk, N) == EXIT_FAIL || scan_matrix (N, argv[3], vector_chunk, 1) == EXIT_FAIL) {
+		if (scan_matrix (N, argv[2], matrix_chunk, N) == EXIT_FAIL || scan_matrix (N, argv[3], b_chunk, 1) == EXIT_FAIL) {
 			return 2;
 		}
 	}
 	else {
-		MPI_Recv (matrix_chunk, N * process_rows, MPI_DOUBLE, 0, N, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
-		MPI_Recv (vector_chunk, process_rows, MPI_DOUBLE, 0, 1, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
-	}																				
-
-	int i = 0;
-	for (i = N; i > 0; i--) {
-		int j = 0;
-		size_t additional_shift = 0;
-		if (rank != ROOT) {
-			if (rank < N % size) {
-				additional_shift = rank - 1;
-			}
-			else {
-				additional_shift = N % size;
-			}
-		}
-		for (j = 0; j < process_rows; j++) { 
-			coords[j] += vector_chunk[j] * matrix_chunk [j * N + (rank + additional_shift + j + i) % N];
-		}
-		MPI_Barrier (MPI_COMM_WORLD);
-		shift_vector (process_rows, vector_chunk);
+		MPI_Recv (matrix_chunk, N * recvcounts[rank], MPI_DOUBLE, 0, N, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+		MPI_Recv (b_chunk, recvcounts[rank], MPI_DOUBLE, 0, 1, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
 	}
+	double b_norm = norm (b_chunk, recvcounts);																			
 
-	test_print(process_rows, coords, 1);
+	do {	
+		multiply (tmp_chunk, matrix_chunk, x_chunk, recvcounts, displs, N);	
+		subtract (tmp_chunk, tmp_chunk, b_chunk, recvcounts, displs, N);
+		tmp_norm = norm (tmp_chunk, recvcounts);
+		multiply_scalar (tmp_chunk, tau, recvcounts);
+		subtract (x_chunk, x_chunk, tmp_chunk, recvcounts, displs, N);
+	}
+	while (tmp_norm / b_norm > EPSILON);
+
+	test_print(recvcounts[rank], x_chunk, 1);
+
 	free (matrix_chunk);
-	free (vector_chunk);
-	free (coords);
+	free (b_chunk);
+	free (x_chunk);
+	free (tmp_chunk);
+	free (displs);
+	free (recvcounts);
 	MPI_Finalize ();
-
-
-
 
 	return 0;
 }
