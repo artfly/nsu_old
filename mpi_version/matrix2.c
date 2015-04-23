@@ -43,7 +43,9 @@ void multiply_scalar (double * vector_chunk, double scalar, int * recvcounts) {
 }
 
 int main(int argc, char *argv[]) {
+	double t1, t2;
 	MPI_Init (&argc, &argv);
+	t1 = MPI_Wtime();
 	MPI_Comm_size (MPI_COMM_WORLD, &size);
 	MPI_Comm_rank (MPI_COMM_WORLD, &rank);
 	if (rank == ROOT) {
@@ -64,7 +66,7 @@ int main(int argc, char *argv[]) {
 	init_allgatherv (recvcounts, displs, N);
 
 	if (rank == ROOT) {
-		if (scan_matrix (N, argv[2], matrix_chunk, N) == EXIT_FAIL || scan_matrix (N, argv[3], b_chunk, 1) == EXIT_FAIL) {
+		if (create_matrix (N, matrix_chunk, N, displs) == EXIT_FAIL || create_matrix (N, matrix_chunk, 1, displs) == EXIT_FAIL) {
 			return 2;
 		}
 	}
@@ -72,7 +74,8 @@ int main(int argc, char *argv[]) {
 		MPI_Recv (matrix_chunk, N * recvcounts[rank], MPI_DOUBLE, 0, N, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
 		MPI_Recv (b_chunk, recvcounts[rank], MPI_DOUBLE, 0, 1, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
 	}
-	double b_norm = norm (b_chunk, recvcounts);																			
+	double b_norm = norm (b_chunk, recvcounts);
+	//test_print(recvcounts[rank], matrix_chunk, N);																			
 
 	do {	
 		multiply (tmp_chunk, matrix_chunk, x_chunk, recvcounts, displs, N);	
@@ -82,8 +85,12 @@ int main(int argc, char *argv[]) {
 		subtract (x_chunk, x_chunk, tmp_chunk, recvcounts, displs, N);
 	}
 	while (tmp_norm / b_norm > EPSILON);
+	t2 = MPI_Wtime ();
+	if (rank == ROOT) {
+		printf("%1.2f\n", t2-t1);
+	}
 
-	test_print(recvcounts[rank], x_chunk, 1);
+	//test_print(recvcounts[rank], x_chunk, 1);
 
 	free (matrix_chunk);
 	free (b_chunk);

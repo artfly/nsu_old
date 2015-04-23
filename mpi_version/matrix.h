@@ -4,11 +4,11 @@
 int size, rank;
 #define EPSILON 0.00001
 
+#include <mpi.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <math.h>
-#include <mpi.h>
 #include "writer.h"
 #include "reader.h"
 #include "help.h"

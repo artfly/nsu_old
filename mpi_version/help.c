@@ -1,4 +1,3 @@
-#include "help.h"
 #include "matrix.h"
 
 void help (char * a) {

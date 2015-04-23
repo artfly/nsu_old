@@ -15,21 +15,21 @@ int main(int argc, char *argv[]) {
 		j = 0;
 		for (j = 0; j < N; j++) {
 			if (i == j) {
-				fprintf(fmatrix, "2.0\t");
+				fprintf(fmatrix, "2.0\n");
 			}
 			else {
-				fprintf(fmatrix, "1.0\t");
+				fprintf(fmatrix, "1.0\n");
 			} 
 		}
 		fprintf(fmatrix, "\n");
 	}
 
 	for (i = 0; i < N; i++) {
-		fprintf(fvector, "%d", N + 1);
+		fprintf(fvector, "%d\n", N + 1);
 	}
 
 	fclose (fmatrix);
-	fclose (fvector);
+	fclose (fvector);	
 
 	return 0;
 }

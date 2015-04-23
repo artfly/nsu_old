@@ -3,7 +3,7 @@ matrix1:
 matrix2:
 	mpicc matrix2.c writer.c reader.c help.c init.c -Wall -o multmv -lm
 test:
-	mpirun -np 3 ./multmv 4 matrix vector out 
+	mpirun -np 1 ./multmv 6000 matrix vector out 
 writer:
 	mpicc writer.c -Wall -o writer
 reader:

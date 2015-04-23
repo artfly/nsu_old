@@ -35,8 +35,10 @@ void subtract (double * result, double * minuend, double * subtrahend, int * rec
 	}
 }
 
-int main(int argc, char *argv[]) {
+int main (int argc, char *argv[]) {
+	double t1, t2;
 	MPI_Init (&argc, &argv);
+	t1 = MPI_Wtime();
 	MPI_Comm_size (MPI_COMM_WORLD, &size);
 	MPI_Comm_rank (MPI_COMM_WORLD, &rank);
 	if (rank == ROOT) {
@@ -57,17 +59,18 @@ int main(int argc, char *argv[]) {
 	double * tmp = malloc (sizeof(double) * N);
 
 	if (rank == ROOT) {
-		if (scan_matrix (N, argv[2], matrix_chunk, N) == EXIT_FAIL) {
+		if (create_matrix (N, matrix_chunk, N, displs) == EXIT_FAIL) {
 			return 2;
 		}
 	}
 	else {
 		MPI_Recv (matrix_chunk, N * recvcounts[rank], MPI_DOUBLE, 0, N, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
 	}
-	if (scan_vector (b, argv[3], N) == EXIT_FAIL) {
+	if (create_vector (b, N) == EXIT_FAIL) {
 		return 2;
 	}
 	double b_norm = norm (b, N);
+	//test_print (recvcounts[rank], matrix_chunk, N);
 
 	do {
 		multiply (tmp, matrix_chunk, x, recvcounts, displs, N);	
@@ -79,11 +82,14 @@ int main(int argc, char *argv[]) {
 		MPI_Allgatherv (MPI_IN_PLACE, recvcounts[rank], MPI_DOUBLE, x, recvcounts, displs, MPI_DOUBLE, MPI_COMM_WORLD);
 	}
 	while (tmp_norm / b_norm > EPSILON);
+	t2 = MPI_Wtime ();
 	
 	if (rank == ROOT) {
 		int i = 0;
+		printf("%1.2f\n", t2-t1);
 		for (i = 0; i < N; i++) {
-			printf("%lf\n", x[i]);
+
+			//printf("%lf\n", x[i]);
 		}
 	}
 
