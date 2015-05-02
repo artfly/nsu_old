@@ -9,7 +9,7 @@ void Multiplier::calculate () {
 	do {
 		iterate();
 	}
-	while (tmp_norm / v_norm > EPSILON);
+	while (tmp_norm / v_norm > EPSILON());
 }
 
 void Multiplier::iterate () {
@@ -46,7 +46,7 @@ double Multiplier::norm (std::vector<double> & vector) {
 
 void Multiplier::multiplyByTau () {
 	for (int i = 0; i < N; i++) {
-		tmp_storage[i] *= TAU;
+		tmp_storage[i] *= TAU();
 	}
 }
 

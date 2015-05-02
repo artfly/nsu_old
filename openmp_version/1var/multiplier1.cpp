@@ -29,7 +29,6 @@ void Multiplier::multiplyMatrixByVector () {
 	#pragma omp parallel for
 	for (i = 0; i < N; i++) {
 		int j = 0;
-		#pragma omp parallel for
 		for (j = 0; j < N; j++) {
 			tmp_storage[i] += m[i * N + j] * result[j];
 		}
@@ -47,7 +46,8 @@ void Multiplier::subtract (std::vector<double> & first, std::vector<double> & se
 double Multiplier::norm (std::vector<double> & vector) {
 	double result = 0;
 	int i = 0;
-	#pragma omp parallel for
+	#pragma omp parallel for \
+					reduction (+:result) schedule(dynamic, vector.size())
 	for (i = 0; i < (int) vector.size(); i++) {
 		result += vector[i] * vector[i];
 	}
@@ -56,7 +56,7 @@ double Multiplier::norm (std::vector<double> & vector) {
 
 void Multiplier::multiplyByTau () {
 	int i = 0;
-	#pragma omp parallel for
+	#pragma omp parallel for 
 	for (i = 0; i < N; i++) {
 		tmp_storage[i] *= TAU();
 	}

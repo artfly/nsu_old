@@ -18,7 +18,7 @@ int main (int argc, char ** argv) {
 	std::cout << "\n";
 	Multiplier * mult = new Multiplier(c->getMatrix(), c->getVector());
 	mult->calculate();
-	mult->showResult();
+	std::cout << "Time taken : " << mult->getTime() << std::endl;
 
 	return 0;
 }

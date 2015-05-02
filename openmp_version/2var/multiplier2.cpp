@@ -29,6 +29,7 @@ void Multiplier::iterate () {
 
 void Multiplier::multiplyMatrixByVector () {
 	int i = 0;
+	#pragma omp for
 	for (i = 0; i < N; i++) {
 		int j = 0;
 		for (j = 0; j < N; j++) {
@@ -39,6 +40,7 @@ void Multiplier::multiplyMatrixByVector () {
 
 void Multiplier::subtract (std::vector<double> & first, std::vector<double> & second) {
 	int i = 0;
+	#pragma omp for
 	for (i = 0; i < N; i++) {
 		first[i] -= second[i];
 	}
@@ -55,6 +57,7 @@ double Multiplier::norm (std::vector<double> & vector) {
 
 void Multiplier::multiplyByTau () {
 	int i = 0;
+	#pragma omp for
 	for (i = 0; i < N; i++) {
 		tmp_storage[i] *= TAU();
 	}

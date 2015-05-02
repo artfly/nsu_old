@@ -89,7 +89,7 @@ int main (int argc, char *argv[]) {
 		printf("%1.2f\n", t2-t1);
 		for (i = 0; i < N; i++) {
 
-			//printf("%lf\n", x[i]);
+			printf("%lf\n", x[i]);
 		}
 	}
 
